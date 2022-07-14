@@ -6,7 +6,7 @@ from pickle import TRUE
 import time
 from chat import Chat
 
-SERVIDOR = '172.24.18.83'
+SERVIDOR = '172.22.32.70'
 PORTA = 9000 
 
 ##### Server Client #####
@@ -23,17 +23,18 @@ class Client(rpyc.Service):
 
 	# executa quando uma conexao eh criada
     def on_connect(self, conn):
-        print(f'<connected: {self.ip}, {self.porta}>')
+        # print(f'<connected: {self.ip}, {self.porta}>')
         pass
 
 	# executa quando uma conexao eh fechada
     def on_disconnect(self, conn):
-        print(f'<disconnected: {self.ip}, {self.porta}>')
+        # print(f'<disconnected: {self.ip}, {self.porta}>')
         pass
 
     # Quando um chat for atualizado no servidor central,
     # esse método é chamando para mostrar a nova msg para o cliente
-    def exposed_recebeMsg(self):
+    def exposed_recebeMsg(self, msg, nickname):
+        print(f'{nickname}: {msg}')
         return
 
     # Análogo ao metodo de cima
@@ -49,9 +50,6 @@ class Client(rpyc.Service):
         print(res)
         return res
 
-    def notifica(s):
-        print(s)
-
     # envia imagem de video para o servidor
     def enviaVideo():
         return
@@ -61,10 +59,10 @@ def iniciaServerClient(servidor, porta):
     print('----- <ServerClient> -----')
     srv.start()
 
-def inicializador():
-    SERVER = multiprocessing.Process(target = iniciaServerClient, args = (SERVIDOR, PORTA))
+def inicializador(porta):
+    SERVER = multiprocessing.Process(target = iniciaServerClient, args = (SERVIDOR, porta))
     SERVER.start()
-    inicio()
+    inicio(porta)
 
 def menu():
     print('-----| Menu |-----')
@@ -79,20 +77,21 @@ def menu():
 
 def chatMenu():
     print('-----| Menu do chat |-----')
-    print('/members - <Mostrar membros do chat>')
-    print('/history - <Mostrar histórico de mensagens>')
+    print('/m - <Mostrar membros do chat>')
+    print('/h - <Mostrar histórico de mensagens>')
+    print('/d - <Mostrar dados do chat>')
     print('/exit - <Para sair do chat>')
     print('--------------------------')
     print('Digite uma opção do menu:')
 
-def inicio():
+def inicio(porta):
     conn = Client.iniciaConexao(5000)
     print('<Bem vindo ao WebChat>')
     print('Digite seu nickname:')
     while True:
         nickname = input()
         if Client.verificaNickname(conn, nickname) == True:
-            conn.root.abreConexao(nickname, SERVIDOR, 5000)
+            conn.root.abreConexao(nickname, SERVIDOR, porta)
             break
         print('Nome já utilizado, escolha outro:')
     menu()
@@ -107,6 +106,8 @@ def inicio():
         if escolha == 3:
             print('Digite o nome do chat que deseja criar:')
             chatname = input()
+            print('Deseja senha? (s) ou (n):')
+            tem_senha = input()
             res = conn.root.criaChat(chatname, nickname)
             print(res)
             menu()
@@ -115,30 +116,38 @@ def inicio():
             chatname = input()
             res = conn.root.entraChat(chatname, nickname)
             chatMenu()
-            print(f'Conectado no chat: ({res})')
+            print(f'Conectado no chat: ({chatname})')
             while True:
                 msg = input()
-                if msg == '/members':
+                if msg == '/m':
                     res = conn.root.membrosChat(chatname)
+                    print('<membros>')
                     print(res)
-                if msg == '/history':
+                    print('---------')
+                if msg == '/h':
                     res = conn.root.historicoDoChat(chatname)
-                    print(res)
+                    print('<chat atualizado>')
                     for n in res:
                         print(f'{res[n][0]}: {res[n][1]}')
+                if msg == '/d':
+                    res = conn.root.dadosChat(chatname)
+                    print('<dados chat>')
+                    print(res)
+                    print('------------')
                 if msg == '/exit':
                     conn.root.saiChat(chatname, nickname)
                     menu()
                     break
-                else:
-                    ret = conn.root.compartilhaMsg(Client.notifica, msg, chatname, nickname)
+                if msg != '/m' or msg != '/h' or msg != '/exit':
+                    ret = conn.root.compartilhaMsg(msg, chatname, nickname)
                     ret
         if escolha == 0:
-            conn.root.exposed_fechaConexao(nickname, SERVIDOR, PORTA)
+            conn.root.exposed_fechaConexao(nickname)
             break
 
 def main():
-    inicializador()
+    PORTA = input('Digite sua porta: ')
+    inicializador(PORTA)
 
 main()
 

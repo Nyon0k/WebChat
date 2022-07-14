@@ -5,23 +5,20 @@ class Chat():
         self.connecteds = {}
         self.msg_history = {}
         self.msg_counter = 0
-        self.last_msg = ''
 
     def dadosChat(self):
         dados = {
             'chatname': self.chatname,
             'criador': self.owner,
-            'conectados': self.connecteds,
-            'histórico': self.msg_history
         }
         return dados
 
     def conecta(self, nickname, ip, porta):
         self.connecteds[nickname] = [ip, porta]
-        print(f'<usuario conectado: {nickname, ip, porta}>')
+        print(f'<chat: {self.chatname} - usuario conectado: {nickname, ip, porta}>')
 
-    def disconecta(self, nickname):
-        self.connecteds.remove(nickname)
+    def desconecta(self, nickname):
+        self.connecteds.pop(nickname)
 
     def membros(self):
         return self.connecteds
@@ -32,10 +29,6 @@ class Chat():
     def novaMsg(self, msg, nickname):
         self.msg_counter += 1
         self.msg_history[self.msg_counter] = [nickname, msg]
-        self.last_msg = msg
-
-    def ultimaMsg(self):
-        return self.last_msg
 
 def encerraChat():
     return

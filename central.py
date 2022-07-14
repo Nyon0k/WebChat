@@ -4,7 +4,7 @@ from pickle import TRUE
 import time
 from chat import Chat
 
-SERVIDOR = '172.24.18.83'
+SERVIDOR = '172.22.32.70'
 PORTA = 5000
 
 # classe que implementa o servico de echo
@@ -42,12 +42,11 @@ class WebChat(rpyc.Service):
     def exposed_verPessoasConectadas(self):
         return self.connections
 
-    def exposed_criaChat(self, chatname, nickname):
+    def exposed_criaChat(self, chatname, nickname, tSenha = False):
         for chat in self.chats:
             if chat == chatname:
                 return 'ERRO: Nome de chat já utilizado'
         chat = Chat(chatname, nickname)
-        print(chat.chatname, chat.owner, chat.connecteds, chat.msg_history)
         self.chats[chatname] = Chat(chatname, nickname)
         print(f'<chat criado: {chatname}>')
         # adiciona o chatname em self.chats, sendo o criador setado como dono
@@ -73,21 +72,26 @@ class WebChat(rpyc.Service):
         chat = self.chats[chatname]
         return chat.membros()
 
+    # mostra todas as mensagens ja enviadas dentro do chat
     def exposed_historicoDoChat(self, chatname):
         chat = self.chats[chatname]
         return chat.historico()
 
+    # mostra quem é o criador e o nome do chat
+    def exposed_dadosChat(self, chatname):
+        chat = self.chats[chatname]
+        return chat.dadosChat()
+
     # notifica todos as pessoas conectadas no chat com a nova msg
-    def exposed_compartilhaMsg(self, notifica, msg, chatname, nickname):
+    def exposed_compartilhaMsg(self, msg, chatname, nickname):
         chat = self.chats[chatname]
         chat.novaMsg(msg, nickname)
         membros_chat = chat.membros()
-        for usuario in membros_chat:
-            if usuario != nickname:
-                print(usuario)
-                # conn = rpyc.connect(*)
-			    # conn.root.recebeMsg(recursao)
-			    # conn.close()
+        for membro in membros_chat:
+            if membro != nickname:
+                connTemp = rpyc.connect(membros_chat[membro][0], membros_chat[membro][1])
+                connTemp.root.recebeMsg(msg, nickname)
+                connTemp.close()
 
     def exposed_compartilhaImg(self):
         return
