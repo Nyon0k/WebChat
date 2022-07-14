@@ -5,17 +5,15 @@ import time
 from chat import Chat
 
 SERVIDOR = '172.24.18.83'
-PORTA = 9000
+PORTA = 5000
 
 # classe que implementa o servico de echo
 class WebChat(rpyc.Service):
     def __init__(self, ip, porta):
         self.ip = ip
         self.porta = porta
-        self.connections = [] # pessoas conectadas
+        self.connections = {} # pessoas conectadas
         self.chats = {} # nomes dos chats que existem: tupla(chatname, dono)
-        self.chat_connections = [] # Pessoas conectadas em cada chat: tupla(chatname, [pessoas])
-        self.msg_chat_history = [] # tupla(chatname, [msgs])
 
 	# executa quando uma conexao eh criada
     def on_connect(self, conn):
@@ -33,12 +31,12 @@ class WebChat(rpyc.Service):
                 return False
         return True
 
-    def exposed_abreConexao(self, nickname):
-        self.connections.append(nickname)
+    def exposed_abreConexao(self, nickname, ip, porta):
+        self.connections[nickname] = [ip, porta]
         # adiciona nickname da pessoa em self.connections
 
     def exposed_fechaConexao(self, nickname):
-        self.connections.remove(nickname)
+        self.connections.pop(nickname)
         # remove nickname da pessoa em self.connections
 
     def exposed_verPessoasConectadas(self):
@@ -58,18 +56,38 @@ class WebChat(rpyc.Service):
     def exposed_verChats(self):
         return self.chats
 
-    def exposed_entraChat(self, chatname):
+    def exposed_entraChat(self, chatname, nickname):
         chat = self.chats[chatname]
+        pessoa = self.connections[nickname]
+        chat.conecta(nickname, pessoa[0], pessoa[1])
         dados = chat.dadosChat()
-        print(dados)
         return dados
 
-    def exposed_mandaMsg():
-        return
+    def exposed_saiChat(self, chatname, nickname):
+        chat = self.chats[chatname]
+        chat.desconecta(nickname)
+        dados = chat.dadosChat()
+        return dados
+
+    def exposed_membrosChat(self, chatname):
+        chat = self.chats[chatname]
+        return chat.membros()
+
+    def exposed_historicoDoChat(self, chatname):
+        chat = self.chats[chatname]
+        return chat.historico()
 
     # notifica todos as pessoas conectadas no chat com a nova msg
-    def exposed_compartilhaMsg(self, notifica, msg):
-        return notifica(msg)
+    def exposed_compartilhaMsg(self, notifica, msg, chatname, nickname):
+        chat = self.chats[chatname]
+        chat.novaMsg(msg, nickname)
+        membros_chat = chat.membros()
+        for usuario in membros_chat:
+            if usuario != nickname:
+                print(usuario)
+                # conn = rpyc.connect(*)
+			    # conn.root.recebeMsg(recursao)
+			    # conn.close()
 
     def exposed_compartilhaImg(self):
         return
