@@ -4,7 +4,7 @@ from pickle import TRUE
 import time
 from chat import Chat
 
-SERVIDOR = '172.22.32.70'
+SERVIDOR = '172.22.32.1'
 PORTA = 5000
 
 # classe que implementa o servico de echo
@@ -93,7 +93,18 @@ class WebChat(rpyc.Service):
                 connTemp.root.recebeMsg(msg, nickname)
                 connTemp.close()
 
-    def exposed_compartilhaImg(self):
+    def exposed_compartilhaImg(self, img, chatname, nickname):
+        chat = self.chats[chatname]
+        membros_chat = chat.membros()
+        for membro in membros_chat:
+            if membro != nickname:
+                connTemp = rpyc.connect(membros_chat[membro][0], membros_chat[membro][1])
+                connTemp.root.recebeImg(img, nickname)
+                connTemp.close()
+        return
+
+    def disparadorThreadsImg(self):
+        # SERVER = multiprocessing.Process(target = , args = (SERVIDOR, porta))
         return
     
 def iniciaServer(servidor, porta):
