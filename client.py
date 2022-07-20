@@ -7,7 +7,7 @@ import time
 from chat import Chat
 import cv2, imutils, pickle
 
-SERVIDOR = '172.22.32.1'
+SERVIDOR = '127.0.0.1'
 PORTA = 9000 
 
 ##### Server Client #####
@@ -39,8 +39,8 @@ class Client(rpyc.Service):
         return
 
     # Análogo ao metodo de cima
-    def exposed_recebeImg(self, img, nickname):
-        print(f'imagem: {img}')
+    def exposed_recebeImg(self, frame, nickname):
+        cv2.imshow(f'{nickname}', frame) # show video frame at client side
         return
 
     def iniciaConexao(PORTA):
@@ -57,48 +57,26 @@ class Client(rpyc.Service):
         while True:
             print(f'<cam connect: {chatname}, {nickname}>')
             if flag:
-                vid = cv2.VideoCapture(0)
-                while (vid.isOpened()):
-                    img, frame = vid.read()
-                    frame = imutils.resize(frame, width=320)
-                    try:
-                        connTemp = rpyc.connect(SERVIDOR, 5000)
-                        connTemp.root.compartilhaImg(frame, chatname, nickname)
-                        connTemp.close()
-                    except Exception as e:
-                        print(e)
-                        raise Exception(e)
+                # try:
+                    vid = cv2.VideoCapture(0)
+                    while (vid.isOpened()):
+                        img, frame = vid.read()
+                        frame = imutils.resize(frame, width=320)
+                        try:
+                            connTemp = rpyc.connect(SERVIDOR, 5000)
+                            connTemp.root.compartilhaImg(frame, chatname, nickname)
+                            connTemp.close()
+                        except Exception as e:
+                            print(e)
+                            raise Exception(e)
 
-                    cv2.imshow('TRANSMITTING VIDEO', frame) # will show video frame on server side.
-                    key = cv2.waitKey(1) & 0xFF
-                    if key == ord('q'):
-                        return
-
-    def videoChat():
-        data = b""
-        # payload_size = struct.calcsize("Q") # Q: unsigned long long integer(8 bytes)
-
-        #Business logic to receive data frames, and unpak it and de-serialize it and show video frame on client side
-        while True:
-            while len(data) < payload_size:
-                packet = client_socket.recv(4 * 1024)  # 4K, range(1024 byte to 64KB)
-                if not packet:
-                    break
-                data += packet # append the data packet got from server into data variable
-            packed_msg_size = data[:payload_size] #will find the packed message size i.e. 8 byte, we packed on server side.
-            data = data[payload_size:] # Actual frame data
-            # msg_size = struct.unpack("Q", packed_msg_size)[0] # meassage size
-            # print(msg_size)
-
-            while len(data) < msg_size:
-                data += client_socket.recv(4 * 1024) # will receive all frame data from client socket
-            frame_data = data[:msg_size] #recover actual frame data
-            data = data[msg_size:]
-            frame = pickle.loads(frame_data) # de-serialize bytes into actual frame type
-            cv2.imshow("RECEIVING VIDEO", frame) # show video frame at client side
-            key = cv2.waitKey(1) & 0xFF
-            if key == ord('q'): # press q to exit video
-                break
+                        cv2.imshow('<transmitindo video>', frame) # will show video frame on server side.
+                        key = cv2.waitKey(1) & 0xFF
+                        if key == ord('q'):
+                            return
+                # except:
+                #     print('<sem acesso à camera>')
+                #     time.sleep(3)
 
 def iniciaServerClient(servidor, porta):
     srv = ThreadedServer(Client(servidor, porta), port = porta)
@@ -184,9 +162,9 @@ def inicio(porta):
                     print('------------')
                 if msg == '/won':
                     flag = True
-                    img_process = Client.enviaVideo(flag, chatname, nickname)
-                    # img_process = multiprocessing.Process(target = Client.enviaVideo, args = (flag, chatname, nickname))
-                    # img_process.start()
+                    # img_process = Client.enviaVideo(flag, chatname, nickname)
+                    img_process = multiprocessing.Process(target = Client.enviaVideo, args = (flag, chatname, nickname))
+                    img_process.start()
                     print('Abriu Vídeo')
                 if msg == '/woff':
                     img_process.terminate()

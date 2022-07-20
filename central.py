@@ -1,10 +1,12 @@
+from concurrent.futures import thread
 import rpyc
 from rpyc.utils.server import ThreadedServer
 from pickle import TRUE
 import time
 from chat import Chat
+import multiprocessing
 
-SERVIDOR = '172.22.32.1'
+SERVIDOR = '127.0.0.1'
 PORTA = 5000
 
 # classe que implementa o servico de echo
@@ -93,19 +95,21 @@ class WebChat(rpyc.Service):
                 connTemp.root.recebeMsg(msg, nickname)
                 connTemp.close()
 
-    def exposed_compartilhaImg(self, img, chatname, nickname):
+    def exposed_compartilhaImg(self, frame, chatname, nickname):
         chat = self.chats[chatname]
         membros_chat = chat.membros()
         for membro in membros_chat:
             if membro != nickname:
-                connTemp = rpyc.connect(membros_chat[membro][0], membros_chat[membro][1])
-                connTemp.root.recebeImg(img, nickname)
-                connTemp.close()
-        return
+                t_conn = multiprocessing.Process(target = self.threadedConnection, args = (membro, membros_chat, frame, nickname))
+                t_conn.start()
+        t_conn.join()
+        t_conn.terminate()
+                
 
-    def disparadorThreadsImg(self):
-        # SERVER = multiprocessing.Process(target = , args = (SERVIDOR, porta))
-        return
+    def threadedConnection(self, membro, membros_chat, frame, nickname):
+        connTemp = rpyc.connect(membros_chat[membro][0], membros_chat[membro][1])
+        connTemp.root.recebeImg(frame, nickname)
+        connTemp.close()
     
 def iniciaServer(servidor, porta):
     srv = ThreadedServer(WebChat(servidor, porta), port = porta)
