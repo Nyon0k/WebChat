@@ -36,12 +36,14 @@ class Client(rpyc.Service):
     # esse método é chamando para mostrar a nova msg para o cliente
     def exposed_recebeMsg(self, msg, nickname):
         print(f'{nickname}: {msg}')
-        return
 
     # Análogo ao metodo de cima
     def exposed_recebeImg(self, frame, nickname):
+        # print(frame)
         cv2.imshow(f'{nickname}', frame) # show video frame at client side
-        return
+        key = cv2.waitKey(1) & 0xFF
+        if key == ord('q'):
+            return
 
     def iniciaConexao(PORTA):
         conn = rpyc.connect(SERVIDOR, PORTA)
@@ -57,26 +59,24 @@ class Client(rpyc.Service):
         while True:
             print(f'<cam connect: {chatname}, {nickname}>')
             if flag:
-                # try:
-                    vid = cv2.VideoCapture(0)
-                    while (vid.isOpened()):
-                        img, frame = vid.read()
-                        frame = imutils.resize(frame, width=320)
-                        try:
-                            connTemp = rpyc.connect(SERVIDOR, 5000)
-                            connTemp.root.compartilhaImg(frame, chatname, nickname)
-                            connTemp.close()
-                        except Exception as e:
-                            print(e)
-                            raise Exception(e)
+                vid = cv2.VideoCapture(-1)
+                while (vid.isOpened()):
+                    img, frame = vid.read()
+                    frame = imutils.resize(frame, width=320)
+                # while True:
+                    # frame = 'oi'
+                    try:
+                        connTemp = rpyc.connect(SERVIDOR, 5000)
+                        connTemp.root.compartilhaImg(frame, chatname, nickname)
+                        connTemp.close()
+                    except Exception as e:
+                        print(e)
+                        raise Exception(e)
 
-                        cv2.imshow('<transmitindo video>', frame) # will show video frame on server side.
-                        key = cv2.waitKey(1) & 0xFF
-                        if key == ord('q'):
-                            return
-                # except:
-                #     print('<sem acesso à camera>')
-                #     time.sleep(3)
+                    cv2.imshow('<transmitindo video>', frame) # will show video frame on server side.
+                    key = cv2.waitKey(1) & 0xFF
+                    if key == ord('q'):
+                        return
 
 def iniciaServerClient(servidor, porta):
     srv = ThreadedServer(Client(servidor, porta), port = porta)
@@ -94,7 +94,6 @@ def menu():
     print('2 - Ver chats')
     print('3 - Criar chat')
     print('4 - Entrar em um chat')
-    print('5 - Abrir chamada de vídeo')
     print('0 - Sair')
     print('----------------')
     print('Escolha uma opção do menu:')
@@ -132,8 +131,8 @@ def inicio(porta):
         if escolha == 3:
             print('Digite o nome do chat que deseja criar:')
             chatname = input()
-            print('Deseja senha? (s) ou (n):')
-            tem_senha = input()
+            # print('Deseja senha? (s) ou (n):')
+            # tem_senha = input()
             res = conn.root.criaChat(chatname, nickname)
             print(res)
             menu()
@@ -168,7 +167,7 @@ def inicio(porta):
                     print('Abriu Vídeo')
                 if msg == '/woff':
                     img_process.terminate()
-                    print('Fechou Vídeo')
+                    print(f'<cam disconnect: {chatname}, {nickname}>')
                 if msg == '/exit':
                     conn.root.saiChat(chatname, nickname)
                     menu()

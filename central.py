@@ -19,12 +19,12 @@ class WebChat(rpyc.Service):
 
 	# executa quando uma conexao eh criada
     def on_connect(self, conn):
-        print(f'<connected: {self.ip}, {self.porta}>')
+        # print(f'<connected: {self.ip}, {self.porta}>')
         pass
 
 	# executa quando uma conexao eh fechada
     def on_disconnect(self, conn):
-        print(f'<disconnected: {self.ip}, {self.porta}>')
+        # print(f'<disconnected: {self.ip}, {self.porta}>')
         pass
 
     def exposed_verificaNickname(self, nickname):
@@ -34,10 +34,12 @@ class WebChat(rpyc.Service):
         return True
 
     def exposed_abreConexao(self, nickname, ip, porta):
+        print(f'<connected: {self.ip}, {self.porta}>')
         self.connections[nickname] = [ip, porta]
         # adiciona nickname da pessoa em self.connections
 
     def exposed_fechaConexao(self, nickname):
+        print(f'<disconnected: {self.ip}, {self.porta}>')
         self.connections.pop(nickname)
         # remove nickname da pessoa em self.connections
 
@@ -96,17 +98,21 @@ class WebChat(rpyc.Service):
                 connTemp.close()
 
     def exposed_compartilhaImg(self, frame, chatname, nickname):
+        # print('aqui')
         chat = self.chats[chatname]
         membros_chat = chat.membros()
         for membro in membros_chat:
-            if membro != nickname:
-                t_conn = multiprocessing.Process(target = self.threadedConnection, args = (membro, membros_chat, frame, nickname))
-                t_conn.start()
-        t_conn.join()
-        t_conn.terminate()
-                
+            connTemp = rpyc.connect(membros_chat[membro][0], membros_chat[membro][1])
+            connTemp.root.recebeImg(frame, nickname)
+            connTemp.close()
+            # print('aqui2')
+                # t_conn = multiprocessing.Process(target = self.threadedConnection, args = (membro, membros_chat, frame, nickname))
+                # t_conn.start()
+        # t_conn.join()
+        # t_conn.terminate()           
 
     def threadedConnection(self, membro, membros_chat, frame, nickname):
+        print(membros_chat[membro][0], membros_chat[membro][1])
         connTemp = rpyc.connect(membros_chat[membro][0], membros_chat[membro][1])
         connTemp.root.recebeImg(frame, nickname)
         connTemp.close()
