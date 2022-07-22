@@ -1,14 +1,15 @@
 import multiprocessing
 from queue import Empty
 from sys import flags
+import threading
 import rpyc
 from rpyc.utils.server import ThreadedServer
 import time
 from chat import Chat
-import cv2, imutils, pickle
+import cv2, pickle
 
-SERVIDOR = '127.0.0.1'
-PORTA = 9000 
+SERVIDOR = "127.0.0.1"
+PORTA = 9000
 
 ##### Server Client #####
 
@@ -17,17 +18,20 @@ class Client(rpyc.Service):
     def __init__(self, ip, porta):
         self.ip = ip
         self.porta = porta
-        self.connections = [] # pessoas conectadas
-        self.chats = {} # nomes dos chats que existem: tupla(chatname, dono)
-        self.chat_connections = [] # Pessoas conectadas em cada chat: tupla(chatname, [pessoas])
-        self.msg_chat_history = [] # tupla(chatname, [msgs])
+        self.connections = []  # pessoas conectadas
+        self.chats = {}  # nomes dos chats que existem: tupla(chatname, dono)
+        self.chat_connections = (
+            []
+        )  # Pessoas conectadas em cada chat: tupla(chatname, [pessoas])
+        self.msg_chat_history = []  # tupla(chatname, [msgs])
+        self.clientes_renderizados = {}
 
-	# executa quando uma conexao eh criada
+    # executa quando uma conexao eh criada
     def on_connect(self, conn):
         # print(f'<connected: {self.ip}, {self.porta}>')
         pass
 
-	# executa quando uma conexao eh fechada
+    # executa quando uma conexao eh fechada
     def on_disconnect(self, conn):
         # print(f'<disconnected: {self.ip}, {self.porta}>')
         pass
@@ -35,15 +39,35 @@ class Client(rpyc.Service):
     # Quando um chat for atualizado no servidor central,
     # esse método é chamando para mostrar a nova msg para o cliente
     def exposed_recebeMsg(self, msg, nickname):
-        print(f'{nickname}: {msg}')
+        print(f"{nickname}: {msg}")
 
     # Análogo ao metodo de cima
     def exposed_recebeImg(self, frame, nickname):
+        print("chegou em recebeImg")
         # print(frame)
-        cv2.imshow(f'{nickname}', frame) # show video frame at client side
-        key = cv2.waitKey(1) & 0xFF
-        if key == ord('q'):
-            return
+        cliente_renderizado = self.clientes_renderizados.get(nickname)
+        if not cliente_renderizado:
+            print("chegou em not cliente_renderizado")
+            self.clientes_renderizados[nickname] = frame
+            proc_cliente = threading.Thread(
+                target=self.renderizar_img, args=(nickname,)
+            )
+            proc_cliente.start()
+        self.clientes_renderizados[nickname] = frame
+
+        # cv2.imshow(f'{nickname}', frame) # show video frame at client side
+        # key = cv2.waitKey(1000) & 0xFF
+        # if key == ord('q'):
+        #    return
+
+    def renderizar_img(self, nickname):
+        print("chegou em renderizar_img")
+        while True:
+            frame = self.clientes_renderizados.get(nickname)
+            cv2.imshow(f"{nickname}", frame)
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord("q"):
+                break
 
     def iniciaConexao(PORTA):
         conn = rpyc.connect(SERVIDOR, PORTA)
@@ -57,68 +81,75 @@ class Client(rpyc.Service):
     # envia imagem de video para o servidor
     def enviaVideo(flag, chatname, nickname):
         while True:
-            print(f'<cam connect: {chatname}, {nickname}>')
+            print(f"<cam connect: {chatname}, {nickname}>")
             if flag:
                 vid = cv2.VideoCapture(-1)
-                while (vid.isOpened()):
+                while vid.isOpened():
                     img, frame = vid.read()
-                    frame = imutils.resize(frame, width=320)
-                # while True:
+                    #    frame = imutils.resize(frame, width=320)
+                    # while True:
                     # frame = 'oi'
                     try:
                         connTemp = rpyc.connect(SERVIDOR, 5000)
-                        connTemp.root.compartilhaImg(frame, chatname, nickname)
-                        connTemp.close()
+                        async_compartilha = rpyc.async_(connTemp.root.compartilhaImg)
+                        async_compartilha(frame, chatname, nickname)
+                        # connTemp.root.compartilhaImg(frame, chatname, nickname)
+                        # connTemp.close()
                     except Exception as e:
                         print(e)
                         raise Exception(e)
 
-                    cv2.imshow('<transmitindo video>', frame) # will show video frame on server side.
-                    key = cv2.waitKey(1) & 0xFF
-                    if key == ord('q'):
-                        return
+                    # cv2.imshow('<transmitindo video>', frame) # will show video frame on server side.
+                    # key = cv2.waitKey(1) & 0xFF
+                    # if key == ord('q'):
+                    #    return
+
 
 def iniciaServerClient(servidor, porta):
-    srv = ThreadedServer(Client(servidor, porta), port = porta)
-    print('----- <ServerClient> -----')
+    srv = ThreadedServer(Client(servidor, porta), port=porta)
+    print("----- <ServerClient> -----")
     srv.start()
 
+
 def inicializador(porta):
-    SERVER = multiprocessing.Process(target = iniciaServerClient, args = (SERVIDOR, porta))
+    SERVER = multiprocessing.Process(target=iniciaServerClient, args=(SERVIDOR, porta))
     SERVER.start()
     inicio(porta)
 
+
 def menu():
-    print('-----| Menu |-----')
-    print('1 - Ver pessoas conectadas')
-    print('2 - Ver chats')
-    print('3 - Criar chat')
-    print('4 - Entrar em um chat')
-    print('0 - Sair')
-    print('----------------')
-    print('Escolha uma opção do menu:')
+    print("-----| Menu |-----")
+    print("1 - Ver pessoas conectadas")
+    print("2 - Ver chats")
+    print("3 - Criar chat")
+    print("4 - Entrar em um chat")
+    print("0 - Sair")
+    print("----------------")
+    print("Escolha uma opção do menu:")
+
 
 def chatMenu():
-    print('-----| Menu do chat |-----')
-    print('/m - <Mostrar membros do chat>')
-    print('/h - <Mostrar histórico de mensagens>')
-    print('/d - <Mostrar dados do chat>')
-    print('/won - <Abrir camera>')
-    print('/woff - <Fechar camera>')
-    print('/exit - <Para sair do chat>')
-    print('--------------------------')
-    print('Digite uma opção do menu:')
+    print("-----| Menu do chat |-----")
+    print("/m - <Mostrar membros do chat>")
+    print("/h - <Mostrar histórico de mensagens>")
+    print("/d - <Mostrar dados do chat>")
+    print("/won - <Abrir camera>")
+    print("/woff - <Fechar camera>")
+    print("/exit - <Para sair do chat>")
+    print("--------------------------")
+    print("Digite uma opção do menu:")
+
 
 def inicio(porta):
     conn = Client.iniciaConexao(5000)
-    print('<Bem vindo ao WebChat>')
-    print('Digite seu nickname:')
+    print("<Bem vindo ao WebChat>")
+    print("Digite seu nickname:")
     while True:
         nickname = input()
         if Client.verificaNickname(conn, nickname) == True:
             conn.root.abreConexao(nickname, SERVIDOR, porta)
             break
-        print('Nome já utilizado, escolha outro:')
+        print("Nome já utilizado, escolha outro:")
     menu()
     while True:
         escolha = int(input())
@@ -129,7 +160,7 @@ def inicio(porta):
             res = conn.root.verChats()
             print(res)
         if escolha == 3:
-            print('Digite o nome do chat que deseja criar:')
+            print("Digite o nome do chat que deseja criar:")
             chatname = input()
             # print('Deseja senha? (s) ou (n):')
             # tem_senha = input()
@@ -137,55 +168,59 @@ def inicio(porta):
             print(res)
             menu()
         if escolha == 4:
-            print('Digite o nome do chat que deseja entrar:')
+            print("Digite o nome do chat que deseja entrar:")
             chatname = input()
             res = conn.root.entraChat(chatname, nickname)
             chatMenu()
-            print(f'Conectado no chat: ({chatname})')
+            print(f"Conectado no chat: ({chatname})")
             while True:
                 msg = input()
-                if msg == '/m':
+                if msg == "/m":
                     res = conn.root.membrosChat(chatname)
-                    print('<membros>')
+                    print("<membros>")
                     print(res)
-                    print('---------')
-                if msg == '/h':
+                    print("---------")
+                if msg == "/h":
                     res = conn.root.historicoDoChat(chatname)
-                    print('<chat atualizado>')
+                    print("<chat atualizado>")
                     for n in res:
-                        print(f'{res[n][0]}: {res[n][1]}')
-                if msg == '/d':
+                        print(f"{res[n][0]}: {res[n][1]}")
+                if msg == "/d":
                     res = conn.root.dadosChat(chatname)
-                    print('<dados chat>')
+                    print("<dados chat>")
                     print(res)
-                    print('------------')
-                if msg == '/won':
+                    print("------------")
+                if msg == "/won":
                     flag = True
                     # img_process = Client.enviaVideo(flag, chatname, nickname)
-                    img_process = multiprocessing.Process(target = Client.enviaVideo, args = (flag, chatname, nickname))
+                    img_process = multiprocessing.Process(
+                        target=Client.enviaVideo, args=(flag, chatname, nickname)
+                    )
                     img_process.start()
-                    print('Abriu Vídeo')
-                if msg == '/woff':
+                    print("Abriu Vídeo")
+                if msg == "/woff":
                     img_process.terminate()
-                    print(f'<cam disconnect: {chatname}, {nickname}>')
-                if msg == '/exit':
+                    print(f"<cam disconnect: {chatname}, {nickname}>")
+                if msg == "/exit":
                     conn.root.saiChat(chatname, nickname)
                     menu()
                     break
-                if msg != '/m' or msg != '/h' or msg != '/exit':
+                if msg != "/m" or msg != "/h" or msg != "/exit":
                     ret = conn.root.compartilhaMsg(msg, chatname, nickname)
                     ret
         if escolha == 0:
             conn.root.exposed_fechaConexao(nickname)
             break
 
+
 def main():
-    PORTA = input('Digite sua porta: ')
+    PORTA = input("Digite sua porta: ")
     inicializador(PORTA)
+
 
 main()
 
-'''ChatVideo'''
+"""ChatVideo"""
 
 #### Client ####
 

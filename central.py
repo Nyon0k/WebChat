@@ -6,7 +6,7 @@ import time
 from chat import Chat
 import multiprocessing
 
-SERVIDOR = '127.0.0.1'
+SERVIDOR = "127.0.0.1"
 PORTA = 5000
 
 # classe que implementa o servico de echo
@@ -14,15 +14,15 @@ class WebChat(rpyc.Service):
     def __init__(self, ip, porta):
         self.ip = ip
         self.porta = porta
-        self.connections = {} # pessoas conectadas
-        self.chats = {} # nomes dos chats que existem: tupla(chatname, dono)
+        self.connections = {}  # pessoas conectadas
+        self.chats = {}  # nomes dos chats que existem: tupla(chatname, dono)
 
-	# executa quando uma conexao eh criada
+    # executa quando uma conexao eh criada
     def on_connect(self, conn):
         # print(f'<connected: {self.ip}, {self.porta}>')
         pass
 
-	# executa quando uma conexao eh fechada
+    # executa quando uma conexao eh fechada
     def on_disconnect(self, conn):
         # print(f'<disconnected: {self.ip}, {self.porta}>')
         pass
@@ -34,25 +34,25 @@ class WebChat(rpyc.Service):
         return True
 
     def exposed_abreConexao(self, nickname, ip, porta):
-        print(f'<connected: {self.ip}, {self.porta}>')
+        print(f"<connected: {self.ip}, {self.porta}>")
         self.connections[nickname] = [ip, porta]
         # adiciona nickname da pessoa em self.connections
 
     def exposed_fechaConexao(self, nickname):
-        print(f'<disconnected: {self.ip}, {self.porta}>')
+        print(f"<disconnected: {self.ip}, {self.porta}>")
         self.connections.pop(nickname)
         # remove nickname da pessoa em self.connections
 
     def exposed_verPessoasConectadas(self):
         return self.connections
 
-    def exposed_criaChat(self, chatname, nickname, tSenha = False):
+    def exposed_criaChat(self, chatname, nickname, tSenha=False):
         for chat in self.chats:
             if chat == chatname:
-                return 'ERRO: Nome de chat já utilizado'
+                return "ERRO: Nome de chat já utilizado"
         chat = Chat(chatname, nickname)
         self.chats[chatname] = Chat(chatname, nickname)
-        print(f'<chat criado: {chatname}>')
+        print(f"<chat criado: {chatname}>")
         # adiciona o chatname em self.chats, sendo o criador setado como dono
         return
 
@@ -93,33 +93,41 @@ class WebChat(rpyc.Service):
         membros_chat = chat.membros()
         for membro in membros_chat:
             if membro != nickname:
-                connTemp = rpyc.connect(membros_chat[membro][0], membros_chat[membro][1])
+                connTemp = rpyc.connect(
+                    membros_chat[membro][0], membros_chat[membro][1]
+                )
                 connTemp.root.recebeMsg(msg, nickname)
                 connTemp.close()
 
     def exposed_compartilhaImg(self, frame, chatname, nickname):
         # print('aqui')
+        print(frame)
         chat = self.chats[chatname]
         membros_chat = chat.membros()
         for membro in membros_chat:
             connTemp = rpyc.connect(membros_chat[membro][0], membros_chat[membro][1])
-            connTemp.root.recebeImg(frame, nickname)
-            connTemp.close()
+            async_recebe_img = rpyc.async_(connTemp.root.recebeImg)
+            async_recebe_img(frame, nickname)
+            # connTemp.root.recebeImg(frame, nickname)
+            # rpyc.async_(connTemp.root.renderizar_img)(nickname)
+            # connTemp.close()
             # print('aqui2')
-                # t_conn = multiprocessing.Process(target = self.threadedConnection, args = (membro, membros_chat, frame, nickname))
-                # t_conn.start()
+            # t_conn = multiprocessing.Process(target = self.threadedConnection, args = (membro, membros_chat, frame, nickname))
+            # t_conn.start()
         # t_conn.join()
-        # t_conn.terminate()           
+        # t_conn.terminate()
 
     def threadedConnection(self, membro, membros_chat, frame, nickname):
         print(membros_chat[membro][0], membros_chat[membro][1])
         connTemp = rpyc.connect(membros_chat[membro][0], membros_chat[membro][1])
         connTemp.root.recebeImg(frame, nickname)
         connTemp.close()
-    
+
+
 def iniciaServer(servidor, porta):
-    srv = ThreadedServer(WebChat(servidor, porta), port = porta)
-    print('----- Server inicializado -----')
+    srv = ThreadedServer(WebChat(servidor, porta), port=porta)
+    print("----- Server inicializado -----")
     srv.start()
+
 
 iniciaServer(SERVIDOR, PORTA)
