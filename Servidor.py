@@ -1,6 +1,6 @@
 # -*- encoding: utf-8 -*-
 
-import rpyc, cv2, pickle, socket
+import rpyc, cv2, pickle, socket, threading
 from Chat import Chat
 
 """ Classe Servidor, que armazena e gerencia chats e atua como HUB de um chat,
@@ -20,11 +20,9 @@ class Servidor(rpyc.Service):
 
         # Dicionário que armazena os chats disponiveis
         self.chats = {}  # Key: chatname. Value: Object chat (instância da classe Chat)
-
-        # Dicionário que armazena o buffer de vídeo de certos clientes num chat (sala)
-        self.videoChat = (
-            {}
-        )  # Key: Chatname. Value: Dicionário {clientname: bufferVideo }
+        
+        ## Lock para proteger as condições de corrida 
+        #self.lock = threading.Lock()
 
     # Inicializa o Servidor no modo passivo para receber conexões RPyC
     def _init_server(self):
@@ -141,6 +139,12 @@ class Servidor(rpyc.Service):
     # // Saída:  Nome dos clientes membros desse chat
     def exposed_membrosChat(self, chatname):
         return self.chats.get(chatname).membros()
+    
+    # Retorna os clientes transmissores de vídeo num chat (sala) #
+    # // Entrada: Nome do chat 
+    # // Saída: Lista de clientes que transmitem video nesse chat
+    def exposed_verTransmissoresVideo(self, chatname):
+        return self.chats.get(chatname).getTransmissoresVideo()
 
     # Compartilha mensagem enviada de um cliente entre os demais membros de um chat (sala) #
     # // Entrada: Mensagem a ser compartilhada, nome do chat que tal mensagem foi enviada e o nome do cliente emissor
@@ -162,24 +166,11 @@ class Servidor(rpyc.Service):
                 connTemp_back.close()
 
     def exposed_compartilharVideo(self, clientname, chatname, frameBytes):
-        if not self.videoChat.get(chatname) or clientname not in self.videoChat.get(
-            chatname
-        ):
-            # Armazena pela primeira vez os frames de vídeo de um cliente do chat num buffer
-            self.videoChat[chatname] = {clientname: frameBytes}
-            print(
-                "< Compartilhando vídeo de "
-                + clientname
-                + " no chat: "
-                + chatname
-                + " >"
-            )
-
-        print("teste")
-        # Atualiza esse buffer
-        self.videoChat[chatname] = {clientname: frameBytes}
         # Resgata o chat (object) disponíveis no Servidor, com o chatname
         chat = self.chats.get(chatname)
+        # Adiciona um novo transmissor ao chat, se não existir ou atualiza seus frames
+        chat.novoTransmissor(clientname, frameBytes)
+        #print(chat.clientes_frames.keys())
         # Encontra outros membros dentro desse chat
         membros_chat = chat.membros()
         # Compartilha video para outros membros desse chat (sala), com exceção do cliente (clientname)
@@ -192,11 +183,9 @@ class Servidor(rpyc.Service):
                 connTemp_back = rpyc.connect(ip_membro, porta_membro)
                 # "Converte" (Wrapper) o método exposed recebeVideo do Cliente para um método assíncrono
                 receberVideo_async = rpyc.async_(connTemp_back.root.receberVideo)
-                for cliente_transmissor in self.videoChat.get(chatname):
+                for cliente_transmissor in chat.clientes_frames:
                     # Envie assincronamente o buffer de frames de vídeo desse transmissor para todos os demais membros do chat (sala)
-                    bufferVideo_cliente = self.videoChat.get(chatname).get(
-                        cliente_transmissor
-                    )
+                    bufferVideo_cliente = chat.clientes_frames.get(cliente_transmissor)
                     receberVideo_async(cliente_transmissor, bufferVideo_cliente)
 
     def exposed_interromperCompartilhamentoVideo(self, clientname, chatname):
@@ -207,10 +196,10 @@ class Servidor(rpyc.Service):
             + chatname
             + " interrompido >"
         )
-        # Desregista clietname dos transmissores de vídeo do chat
-        self.videoChat.get(chatname).pop(clientname)
         # Resgata o chat (object) disponíveis no Servidor, com o chatname
         chat = self.chats.get(chatname)
+        # Desregista clietname dos transmissores de vídeo do chat
+        chat.clientes_frames.pop(clientname) # pop direto num campo da classe chat
         # Encontra outros membros dentro desse chat
         membros_chat = chat.membros()
         # Interrompe a renderização assincronamente para todos os demais membros do chat
@@ -221,9 +210,7 @@ class Servidor(rpyc.Service):
                     membros_chat.get(membro)[1],
                 )
                 connTemp_back = rpyc.connect(ip_membro, porta_membro)
-                interromperRenderizacao_async = rpyc.async_(
-                    connTemp_back.root.interromperRenderizacao
-                )
+                interromperRenderizacao_async = rpyc.async_(connTemp_back.root.interromperRenderizacao)
                 interromperRenderizacao_async(clientname)
 
     # Desconecta um cliente de um chat #
@@ -239,6 +226,6 @@ def main(IP_SERVIDOR, PORTA_SERVIDOR):
 
 
 if __name__ == "__main__":
-    IP_SERVIDOR = "192.168.0.65"  # Set IP_SERVIDOR
+    IP_SERVIDOR = "192.168.0.66"  # Set IP_SERVIDOR
     PORTA_SERVIDOR = "5000"  # Set PORTA_SERVIDOR
     main(IP_SERVIDOR, PORTA_SERVIDOR)

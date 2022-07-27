@@ -114,17 +114,14 @@ class Cliente(rpyc.Service):
         self.conn.root.compartilharMsg(msg, chatname, self.nickname)
 
     def _init_video(self, chatname):
-        if not self.transmissao_video:
-            thread_transmissaoVideo = threading.Thread(
-                target=self.transmitirVideo,
-                args=(chatname,),
-            )
-            # self.threads_transmissaoVideo.append(thread_transmissaoVideo)
-            thread_transmissaoVideo.start()
-
+        transmissoresVideo = self.conn.root.verTransmissoresVideo(chatname)
+        # Se o cliente não está transmistindo vídeo, então lance uma thread
+        if self.nickname not in transmissoresVideo:
+            thread_video = threading.Thread(target = self.transmitirVideo, args = (chatname,))
+            thread_video.start()
+    
     # #
     def transmitirVideo(self, chatname):
-        print("b")
         # Bloco atômico
         # self.lock.acquire()
         video = cv2.VideoCapture(0)
@@ -146,21 +143,22 @@ class Cliente(rpyc.Service):
 
             # print(frameBytes)
             # Camera do Cliente (transmissor)
-            cv2.imshow("Transmitindo video", frame)
+            cv2.imshow("< T: " + chatname + " >", frame)
 
             # Tecla de atalho 'q' fecha a janela de vídeo
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 break
 
             # Botão X da GUI fecha a janela de vídeo
-            if cv2.getWindowProperty("Transmitindo video", cv2.WND_PROP_VISIBLE) < 1:
+            if cv2.getWindowProperty("< T: " + chatname + " >", cv2.WND_PROP_VISIBLE) < 1:
                 break
 
             # "Converte" (Wrapper) o método exposed_compartilharVideo do SERVIDOR para um método assíncrono
             compartilharVideo_async = rpyc.async_(self.conn.root.compartilharVideo)
             # Envia assincronamente o fluxo de bytes (com os frames do vídeo) para o SERVIDOR
             compartilharVideo_async(self.nickname, chatname, frameBytes)
-
+            #self.conn.root.compartilharVideo(self.nickname, chatname, frameBytes)
+    
         # Libera o hardware (camera) de vídeo
         video.release()
 
@@ -172,6 +170,8 @@ class Cliente(rpyc.Service):
             self.conn.root.interromperCompartilhamentoVideo
         )
         interromperCompartilhamento_async(self.nickname, chatname)
+        
+        # Precisa terminar o processo??
 
         # Vídeo OFF
         print("Vídeo OFF")
@@ -224,14 +224,38 @@ class Cliente(rpyc.Service):
     # // Entrada: Nome do cliente que enviou a mensagem e a mensagem
     def exposed_receberMsg(self, clientname, msg):
         print(f"{clientname}: {msg}")
+        
+    # Não funciona !
+    #def exposed_receberVideo2(self, chatname, clientname):
+        ## gambiarra, cliente mexendo em chat
+        #chat = self.conn.root.verChatsDisponiveis().get(chatname)
+        #transmissoresVideo = chat.getTransmissoresVideo()
+        #for cliente in transmissoresVideo:
+            #bufferCliente = chat.clientes_frames.get(cliente)
+            #self.renderizarVideo2(bufferCliente)
+    
+    #def renderizarVideo2(self, bufferCliente):
+        #while True:
+            #frame = pickle.loads(bufferCliente)
+            ## Exibem os frames na janela do opencv
+            #cv2.imshow("< R: " + clientname + " >", frame)
+            #cv2.waitKey(1)
+            #if cv2.waitKey(1) & 0xFF == ord("q"):
+                #break
+            #if (cv2.getWindowProperty("< R: " + clientname + " >", cv2.WND_PROP_VISIBLE) < 1):
+                #break
+
+        #cv2.destroyWindow("< R: " + clientname + " >")
 
     # #
     def exposed_receberVideo(self, clientname, bufferVideo_cliente):
+        # Verifica se o cliente já foi renderizado
         cliente_renderizado = self.clientes_renderizados.get(clientname)
         if not cliente_renderizado:
+            # Se não foi, preenche o buffer
             self.clientes_renderizados[clientname] = bufferVideo_cliente
-            print("< Recepção de vídeo do cliente " + clientname + " iniciada >")
-            # Thread lançada para renderizar essa recepção
+            print("< R: " + clientname + " >")
+            # Thread lançada para renderizar essa recepção  => Lança uma janela opencv
             thread_video = threading.Thread(
                 target=self.renderizarVideo, args=(clientname,)
             )  # vírgula , pois clientname no args necessária!
@@ -252,7 +276,7 @@ class Cliente(rpyc.Service):
                 # Carrega o fluxo (stream) de bytes como um frame
                 frame = pickle.loads(bufferVideo_cliente)
                 # Exibem os frames na janela do opencv
-                cv2.imshow("Transmissao de Video do usuario: " + clientname, frame)
+                cv2.imshow("< R: " + clientname + " >", frame)
                 cv2.waitKey(1)
                 # Tenta fechar as janelas de recepção manualmente
                 try:
@@ -261,13 +285,7 @@ class Cliente(rpyc.Service):
                         break
 
                     # Botão X da GUI fecha a janela de vídeo
-                    if (
-                        cv2.getWindowProperty(
-                            "Transmissao de Video do usuario: " + clientname,
-                            cv2.WND_PROP_VISIBLE,
-                        )
-                        < 1
-                    ):
+                    if (cv2.getWindowProperty("< R: " + clientname + " >", cv2.WND_PROP_VISIBLE) < 1):
                         break
                 # Caso não seja possível, elas já foram fechadas, então ignore os erros
                 except cv2.error:
@@ -279,7 +297,7 @@ class Cliente(rpyc.Service):
         # Desregistra a renderização de video desse cliente, caso não tenha sido feito
         self.clientes_renderizados.pop(clientname)
         # Fecha a janela do opencv que renderizava esta transmissão
-        cv2.destroyWindow("Transmissao de Video do usuario: " + clientname)
+        cv2.destroyWindow("< R: " + clientname + " >")
         # Encerra sua thread de recepção e renderização
         thread_renderizacao = self.threads_videosRenderizados.get(clientname)
         # Remove essa thread do dicionário de threads de recepção e renderização

@@ -18,6 +18,9 @@ class Chat():
         # String para armazenar a ultima mensagem recebida no chat
         self.msg_recebida = ""
         
+        # Dicionário que armazena os frames de vídeo transmistidos por cliente do chat (sala)
+        self.clientes_frames = {} # Key: clientname. Value: bytes dos frames de video desse cliente
+        
     def dadosChat(self):
         dados = {
             'chatname': self.chatname,
@@ -47,3 +50,11 @@ class Chat():
 
     def msgRecebida(self, msg, clientname):
         self.msg_recebida = clientname + " diz: " + msg + '\n'
+    
+    # Se o transmissor for o mesmo, atualiza os frames dele
+    def novoTransmissor(self, clientname, frameBytes):
+        self.clientes_frames[clientname] = frameBytes
+        
+    # Retorna uma lista de transmissores de video num chat
+    def getTransmissoresVideo(self):
+        return self.clientes_frames.keys()

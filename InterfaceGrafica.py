@@ -481,7 +481,8 @@ class ChatWindow:
         self.frame_buttons = tkinter.Frame(self.frame_chat)
         # Constroi os botões
         self.bt_historicoMSG = tkinter.Button(self.frame_buttons, text = "Historico", fg = "white", bg = "gray")
-        self.bt_transmissaoVideo = tkinter.Button(self.frame_buttons, text = "Video", fg = "white", bg = "gray")
+        self.bt_transmissaoVideo = tkinter.Button(self.frame_buttons, text = "Video", fg = "white", bg = "gray",
+                                                  command = self.ligarVideo)
         self.bt_sairChat = tkinter.Button(self.frame_buttons, text = "Sair", fg = "white", bg = "gray", 
                                           command = self._destroy_chatWindow)
         
@@ -540,6 +541,9 @@ class ChatWindow:
             if membro == self.cliente.nickname:
                 self.ltb_membrosChat.itemconfig(membroNumber, foreground = "#092366")
             membroNumber += 1
+    
+    def ligarVideo(self):
+        self.cliente._init_video(self.chatname)
     
     # Event handler para enviar a mensagem
     def enviarMensagem(self, event):
